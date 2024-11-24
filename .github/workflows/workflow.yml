@@ -1,0 +1,74 @@
+name: Flutter Build and Release
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch: # Allow manual triggers
+
+jobs:
+  build:
+    name: Build Flutter App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v3
+        with:
+          java-version: "21"
+          distribution: "temurin"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          fllutter-version: "3.23.0"
+          channel: stable
+      - run: flutter --version
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: flutter-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download APK Artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: flutter-apk
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        with:
+          tag_name: v${{ github.run_number }}
+          release_name: "Build #${{ github.run_number }}"
+          body: |
+            Automatic release created by GitHub Actions.
+            Contains the latest builds for Android
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload APK to Release
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: build/app/outputs/flutter-apk/app-release.apk
+          asset_name: app-release.apk
+          asset_content_type: application/vnd.android.package-archive
